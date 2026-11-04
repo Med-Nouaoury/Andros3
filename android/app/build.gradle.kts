@@ -12,7 +12,7 @@ android {
     ndkVersion = "29.0.14206865"
 
     defaultConfig {
-        applicationId = "com.ps3native.standard"
+        applicationId = "io.github.mednouaoury.andros3"
         minSdk = 31
         targetSdk = 35
         versionCode = 1
@@ -78,21 +78,12 @@ android {
     flavorDimensions += "branding"
 
     productFlavors {
+        // Andros3 ships under its own package name only. The upstream fork also
+        // built copies under other apps' package names (benchmark/game IDs) to
+        // trigger vendor performance governors; that is dropped here.
         create("standard") {
             dimension = "branding"
-            applicationId = "com.ps3native.standard"
-        }
-        create("antutu") {
-            dimension = "branding"
-            applicationId = "com.antutu.ABenchMark"
-        }
-        create("ludashi") {
-            dimension = "branding"
-            applicationId = "com.ludashi.benchmark"
-        }
-        create("pubg") {
-            dimension = "branding"
-            applicationId = "com.tencent.ig"
+            applicationId = "io.github.mednouaoury.andros3"
         }
     }
 

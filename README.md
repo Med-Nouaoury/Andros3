@@ -1,11 +1,25 @@
-PS3Native
-=========
+Andros3
+=======
 
-A PlayStation 3 emulator for Android, built directly on top of current upstream [RPCS3](https://github.com/RPCS3/rpcs3).
+A PlayStation 3 emulator for Android, built on top of upstream [RPCS3](https://github.com/RPCS3/rpcs3).
 
-This fork tracks the real RPCS3 tree rather than a snapshot. The archived [RPCS3-Android](https://github.com/RPCS3/rpcs3-android) port is folded in at [`android/`](android), rebased onto current upstream, and carried forward with additional fixes and interface work contributed by the [WinNative](https://github.com/WinNative-Emu) developers.
+Andros3 is a fork of [PS3Native](https://github.com/maxjivi05/PS3Native), which tracks the real RPCS3 tree rather than a snapshot. It is developed by [Mohamed Nouaoury](https://github.com/Med-Nouaoury) as an open-source project and as his graduation project at Institut Grasset (Montréal).
 
-## What this is
+> **No games, firmware or BIOS files are provided, and none will be.** Dump the games you own from your own PS3, and install the official PS3 system software from Sony's website. Do not ask for links.
+
+## Andros3 goals
+
+The emulator core stays unmodified upstream RPCS3. Andros3's own work lives in the Android front end (`android/`):
+
+* its own package name (`io.github.mednouaoury.andros3`), so it installs alongside other ports
+* interface and settings work aimed at Snapdragon devices
+* clear, honest crediting of every project it builds on
+
+## Upstream: PS3Native
+
+The rest of this section describes the PS3Native base that Andros3 inherits. The archived [RPCS3-Android](https://github.com/RPCS3/rpcs3-android) port is folded in at [`android/`](android), rebased onto current upstream, and carried forward with additional fixes and interface work contributed by the [WinNative](https://github.com/WinNative-Emu) developers.
+
+### What this is
 
 Upstream RPCS3 targets desktop platforms. The Android port was published separately and then went stale against a moving upstream. The goal here is a single tree where:
 
@@ -16,7 +30,7 @@ Upstream RPCS3 targets desktop platforms. The Android port was published separat
 
 Everything below `android/` is additive. The upstream history is preserved intact.
 
-## State
+### State
 
 Working:
 
@@ -48,20 +62,11 @@ Requirements: JDK 17, Android NDK 29, CMake 3.31, and a checkout with submodules
 
 The dependency scripts are the slow part and only need running when they change. `android/prebuilt/` is not tracked.
 
-To build in CI, run the **Android APK** workflow manually from the Actions tab. It is dispatch-only, caches the cross-compiled dependencies against the build-script hashes, and shares a ccache across both the dependency and application builds, so a run that only touches app code reuses everything else.
+To build in CI, push to `android-refresh` or run the **Android APK** workflow manually from the Actions tab. It caches the cross-compiled dependencies against the build-script hashes, and shares a ccache across both the dependency and application builds, so a run that only touches app code reuses everything else.
 
-## Flavors
+## Package name
 
-The same APK is published under several package names. Some Android vendors gate their high-performance CPU and GPU governors on an allowlist of package names, so a build installed under one of those identifiers is scheduled more aggressively. Pick whichever performs best on your device.
-
-| Flavor | Package name | Gradle task |
-| --- | --- | --- |
-| `standard` | `com.ps3native.standard` | `assembleStandardDebug` |
-| `antutu` | `com.antutu.ABenchMark` | `assembleAntutuDebug` |
-| `ludashi` | `com.ludashi.benchmark` | `assembleLudashiDebug` |
-| `pubg` | `com.tencent.ig` | `assemblePubgDebug` |
-
-All four are the same emulator and carry the same name and icon. Because a package name is unique on a device, a flavor cannot be installed alongside the real application that owns that identifier, and only `standard` is suitable for distribution through an app store.
+Andros3 builds a single APK under its own package name, `io.github.mednouaoury.andros3` (Gradle task `assembleStandardDebug`). The upstream fork also published copies under other apps' package names (benchmark and game IDs) to get scheduled more aggressively by some vendors; Andros3 does not ship those.
 
 ## Frame generation
 
@@ -73,6 +78,7 @@ Interpolation costs one extra frame of latency — holding the newer frame back 
 
 ## Credits
 
+* the [PS3Native](https://github.com/maxjivi05/PS3Native) project by maxjivi05, which Andros3 is forked from
 * the [RPCS3](https://github.com/RPCS3/rpcs3) team, for the emulator
 * the [RPCS3-Android](https://github.com/RPCS3/rpcs3-android) port this build started from
 * the [WinNative](https://github.com/WinNative-Emu) developers, for the interface work and Android fixes
@@ -91,4 +97,4 @@ lsfg-vk is MIT, which is compatible with both GPLv2 and GPLv3. The files under `
 
 ## License
 
-Most files are licensed under GNU GPL-2.0-only; see [LICENSE](LICENSE). Some files are licensed differently — check the individual file headers. This project is not affiliated with or endorsed by Sony Interactive Entertainment.
+Most files are licensed under GNU GPL-2.0-only; see [LICENSE](LICENSE). Some files are licensed differently — check the individual file headers. Andros3 is not affiliated with or endorsed by Sony Interactive Entertainment, the RPCS3 team, or PS3Native. "PlayStation" is a registered trademark of Sony Interactive Entertainment Inc.

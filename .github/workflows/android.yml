@@ -168,7 +168,7 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: |
           if [ "$VARIANT" = "release" ]; then suffix=Release; else suffix=Debug; fi
-          flavors="standard antutu ludashi pubg"
+          flavors="standard"
           tasks=""
           for f in $flavors; do
             tasks="$tasks assemble${f^}${suffix}"
@@ -225,10 +225,10 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
           mkdir -p "$RUNNER_TEMP/release"
-          for f in standard antutu ludashi pubg; do
+          for f in standard; do
             src=$(find "app/build/outputs/apk/$f/release" -name '*.apk' | head -1)
             [ -n "$src" ] || { echo "::error::no release APK for flavor $f"; exit 1; }
-            cp "$src" "$RUNNER_TEMP/release/ps3native-$f-$tag.apk"
+            cp "$src" "$RUNNER_TEMP/release/andros3-$tag.apk"
           done
 
           cd "$RUNNER_TEMP/release"
@@ -241,7 +241,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.assets.outputs.tag }}
-          name: PS3Native ${{ steps.assets.outputs.tag }}
+          name: Andros3 ${{ steps.assets.outputs.tag }}
           draft: ${{ env.DRAFT_RELEASE == 'true' }}
           prerelease: false
           generate_release_notes: true
@@ -285,30 +285,9 @@ jobs:
             echo "Re-run with **Create a draft GitHub Release** to get one you can review."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload standard APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ps3native-standard-${{ env.VARIANT }}
+          name: andros3-${{ env.VARIANT }}
           path: android/app/build/outputs/apk/standard/${{ env.VARIANT }}/*.apk
-          if-no-files-found: error
-
-      - name: Upload antutu APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: ps3native-antutu-${{ env.VARIANT }}
-          path: android/app/build/outputs/apk/antutu/${{ env.VARIANT }}/*.apk
-          if-no-files-found: error
-
-      - name: Upload ludashi APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: ps3native-ludashi-${{ env.VARIANT }}
-          path: android/app/build/outputs/apk/ludashi/${{ env.VARIANT }}/*.apk
-          if-no-files-found: error
-
-      - name: Upload pubg APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: ps3native-pubg-${{ env.VARIANT }}
-          path: android/app/build/outputs/apk/pubg/${{ env.VARIANT }}/*.apk
           if-no-files-found: error
