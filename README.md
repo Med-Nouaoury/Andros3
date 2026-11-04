@@ -3,7 +3,7 @@ Andros3
 
 A PlayStation 3 emulator for Android, built on top of upstream [RPCS3](https://github.com/RPCS3/rpcs3).
 
-Andros3 is a fork of [PS3Native](https://github.com/maxjivi05/PS3Native), which tracks the real RPCS3 tree rather than a snapshot. It is developed by [Mohamed Nouaoury](https://github.com/Med-Nouaoury) as an open-source project and as his graduation project at Institut Grasset (Montréal).
+Andros3 is a fork of [PS3Native](https://github.com/maxjivi05/PS3Native), which tracks the real RPCS3 tree rather than a snapshot. It is developed by [Mohamed Nouaoury](https://github.com/Med-Nouaoury) as an open-source project.
 
 > **No games, firmware or BIOS files are provided, and none will be.** Dump the games you own from your own PS3, and install the official PS3 system software from Sony's website. Do not ask for links.
 
