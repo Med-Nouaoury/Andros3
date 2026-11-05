@@ -339,8 +339,8 @@ class BenchmarkRecorder(
                 slow.isEmpty() -> "no slow seconds"
                 avgOf(slow) { it.compile } > 120f ->
                     "slow seconds line up with code/shader compilation; a second run through the same area should be smoother"
-                avgOf(slow) { it.ppuMain } >= 85f -> "PPU bound (main game thread saturates one core)"
-                avgOf(slow) { it.spuMax } >= 85f -> "SPU bound (an SPU thread saturates one core)"
+                avgOf(slow) { it.ppuMain } >= 75f -> "PPU bound (main game thread saturates one core)"
+                avgOf(slow) { it.spuMax } >= 70f -> "SPU bound (an SPU thread saturates one core)"
                 avgOf(slow) { it.rsx } >= 85f -> "RSX bound (graphics command thread saturates one core)"
                 else -> "no single thread saturated in slow seconds; likely waiting on GPU, sync or clocks"
             }

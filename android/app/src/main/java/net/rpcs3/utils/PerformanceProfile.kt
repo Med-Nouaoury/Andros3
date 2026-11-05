@@ -13,18 +13,22 @@ import java.io.File
  * Out of the box every CPU is "General", the scheduler mode is "Operating System",
  * and Android is free to run a PPU or SPU thread on a low-power core, which drags
  * the whole emulation down. This profile reads each core's capacity and assigns:
- *  - the fastest core(s) to PPU, so the main game thread always has a prime core
  *  - low-power cores to Background, so no emulator thread is pinned there
- *  - everything else to General, shared by PPU, SPU and RSX
+ *  - every other core, prime included, to General, shared by PPU, SPU and RSX
  * and switches the scheduler to "RPCS3 Scheduler" so the masks are honoured.
  *
+ * v1 reserved the prime core for PPU. Benchmarks of an SPU-heavy game on an
+ * 8 Gen 3 showed the main PPU thread at ~20% of a core while single SPU threads
+ * saturated the mid cores and the X4 sat mostly idle, so v2 opens it to all.
+ *
  * It is applied once per config (global and each per-game config) and only while
- * that config is still at the stock values, so a user's own choices are kept.
+ * that config is still at the stock values or at Andros3's own previous plan, so
+ * a user's own choices are kept.
  */
 object PerformanceProfile {
     private const val TAG = "PerformanceProfile"
     private const val PREFS = "PerformanceProfile"
-    private const val VERSION = 1
+    private const val VERSION = 2
     private const val MAX_CONFIG_CPUS = 8
 
     private const val SCHEDULER_KEY = "Core@@Thread Scheduler Mode"
@@ -37,40 +41,42 @@ object PerformanceProfile {
         val isUseful: Boolean get() = classes.any { it != "General" }
     }
 
+    private fun capacities(): List<Int>? {
+        val count = Runtime.getRuntime().availableProcessors().coerceAtMost(MAX_CONFIG_CPUS)
+        val caps = (0 until count).map { readCapacity(it) }
+        if (caps.any { it <= 0 }) {
+            Log.w(TAG, "Unreadable core capacities $caps, leaving affinity alone")
+            return null
+        }
+        return caps.takeIf { it.min() != it.max() }
+    }
+
     /** Builds the per-CPU plan from sysfs, or null on homogeneous / unreadable CPUs. */
     fun plan(): Plan? {
-        val count = Runtime.getRuntime().availableProcessors().coerceAtMost(MAX_CONFIG_CPUS)
-        val capacities = (0 until count).map { readCapacity(it) }
-
-        if (capacities.any { it <= 0 }) {
-            Log.w(TAG, "Unreadable core capacities $capacities, leaving affinity alone")
-            return null
-        }
-
-        val max = capacities.max()
-        val min = capacities.min()
-        if (min == max) {
-            return null
-        }
-
-        val primeCount = capacities.count { it == max }
-        // Keep the PPU core(s) exclusive only when that still leaves enough room for the rest.
-        val reservePrime = primeCount <= 2 && count - primeCount >= 4
-
-        val classes = capacities.map { capacity ->
-            when {
-                capacity == max && reservePrime -> "PPU"
-                capacity * 2 < max -> "Background"
-                else -> "General"
-            }
-        }
-
+        val caps = capacities() ?: return null
+        val max = caps.max()
+        val classes = caps.map { if (it * 2 < max) "Background" else "General" }
         // Never leave fewer than three cores that SPU and RSX threads may use.
         if (classes.count { it == "General" } < 3) {
             return null
         }
-
         return Plan(classes)
+    }
+
+    /** The v1 plan (prime core reserved for PPU), to recognise configs written by v1. */
+    private fun planV1(): Plan? {
+        val caps = capacities() ?: return null
+        val max = caps.max()
+        val primeCount = caps.count { it == max }
+        val reservePrime = primeCount <= 2 && caps.size - primeCount >= 4
+        val classes = caps.map {
+            when {
+                it == max && reservePrime -> "PPU"
+                it * 2 < max -> "Background"
+                else -> "General"
+            }
+        }
+        return Plan(classes).takeIf { classes.count { it == "General" } >= 3 }
     }
 
     /** Startup: the global config and every existing per-game config. */
@@ -106,9 +112,9 @@ object PerformanceProfile {
             return
         }
 
-        if (isStock(titleId)) {
+        if (isStock(titleId) || matches(planV1(), titleId)) {
             write(plan, titleId)
-            Log.i(TAG, "Applied core plan to ${titleId.ifEmpty { "global config" }}")
+            Log.i(TAG, "Applied core plan v$VERSION to ${titleId.ifEmpty { "global config" }}")
         }
 
         prefs.edit { putBoolean(stamp, true) }
@@ -126,6 +132,16 @@ object PerformanceProfile {
             return false
         }
         return (0 until MAX_CONFIG_CPUS).all { read(cpuKey(it), titleId).let { v -> v.isEmpty() || v == "General" } }
+    }
+
+    private fun matches(plan: Plan?, titleId: String): Boolean {
+        if (plan == null || read(SCHEDULER_KEY, titleId) != SCHEDULER_RPCS3) {
+            return false
+        }
+        return (0 until MAX_CONFIG_CPUS).all { index ->
+            val expected = plan.classes.getOrNull(index) ?: "General"
+            read(cpuKey(index), titleId).ifEmpty { "General" } == expected
+        }
     }
 
     private fun write(plan: Plan, titleId: String) {
