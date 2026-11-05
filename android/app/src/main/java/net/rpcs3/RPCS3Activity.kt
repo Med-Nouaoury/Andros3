@@ -1,6 +1,8 @@
 package net.rpcs3
 
 import net.rpcs3.utils.CpuSupport
+import net.rpcs3.benchmark.BenchmarkPrefs
+import net.rpcs3.benchmark.BenchmarkRecorder
 import androidx.activity.ComponentActivity
 import android.hardware.display.DisplayManager
 import android.os.Handler
@@ -53,6 +55,7 @@ class RPCS3Activity : ComponentActivity() {
     private val hudHandler = Handler(Looper.getMainLooper())
     private var hudPump: Runnable? = null
     private var hudGraphPump: Runnable? = null
+    private var benchmark: BenchmarkRecorder? = null
     private var hudPrefsListener:
         android.content.SharedPreferences.OnSharedPreferenceChangeListener? = null
     private var overlayPrefsListener:
@@ -138,6 +141,10 @@ class RPCS3Activity : ComponentActivity() {
 
         startHud()
         startOverlay()
+
+        if (BenchmarkPrefs.isEnabled(this)) {
+            benchmark = BenchmarkRecorder(this) { resolveTitleId() }.also { it.start() }
+        }
 
         binding.oscToggle.setOnClickListener {
             OverlayPrefs.setEnabled(this, !OverlayPrefs.isEnabled(this))
@@ -552,6 +559,8 @@ class RPCS3Activity : ComponentActivity() {
         if (CpuSupport.missingFeatures != null) {
             return
         }
+        benchmark?.stop()
+        benchmark = null
         stopHud()
         stopOverlay()
         stopFrameGenDisplay()

@@ -555,4 +555,15 @@
     <string name="framegen_runtime_idle">Starts once a game is running.</string>
     <string name="framegen_runtime_unsupported">This GPU rejected the frame generation pipelines, so it stays off.</string>
     <string name="framegen_latency_note">Interpolation always adds a little latency: the real frame is held back while the frames before it are shown. It buys smoothness, not response.</string>
+    <string name="debug_tab_benchmark">Benchmark</string>
+    <string name="benchmark_record">Record benchmark</string>
+    <string name="benchmark_record_hint">Saves FPS, frame times, temperature, throttling and CPU clocks of every game session to a CSV file.</string>
+    <string name="benchmark_how">To compare builds or emulators: play the same scene for the same length of time on each, then compare the summary lines at the top of each file. Close the game from the in-game menu to save the file.</string>
+    <string name="benchmark_share_last">Share last benchmark</string>
+    <string name="benchmark_share_last_desc">Send the most recent CSV file</string>
+    <string name="benchmark_last">Last recording: %1$s</string>
+    <string name="benchmark_none">No benchmark recorded yet</string>
+    <string name="benchmark_share_chooser">Share Benchmark</string>
+    <string name="benchmark_saved">Benchmark saved: %1$s</string>
+    <string name="benchmark_not_saved">Could not save the benchmark</string>
 </resources>

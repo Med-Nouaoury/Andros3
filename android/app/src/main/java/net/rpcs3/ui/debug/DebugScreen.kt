@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.LayersClear
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -104,7 +105,8 @@ fun DebugScreen(
     val activeCount = values.count { it.value != LogLevelOff }
 
     val tabs = listOf(
-        PaneTab(stringResource(R.string.debug_tab_troubleshooting), Icons.Outlined.BugReport)
+        PaneTab(stringResource(R.string.debug_tab_troubleshooting), Icons.Outlined.BugReport),
+        PaneTab(stringResource(R.string.debug_tab_benchmark), Icons.Outlined.Speed)
     )
 
     PaneScaffold(
@@ -117,7 +119,9 @@ fun DebugScreen(
         scrollableContent = false,
         contentMaxWidth = Dims.WideContentMaxWidth
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        if (selected == 1) {
+            BenchmarkPane()
+        } else Column(modifier = Modifier.fillMaxSize()) {
             PaneSectionTitle(
                 if (loading) {
                     stringResource(R.string.debug_logging_loading)
