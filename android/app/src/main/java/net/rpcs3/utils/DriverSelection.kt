@@ -3,6 +3,7 @@ package net.rpcs3.utils
 import android.content.Context
 import androidx.core.content.edit
 import net.rpcs3.RPCS3
+import org.json.JSONObject
 import java.io.File
 
 object DriverSelection {
@@ -84,9 +85,21 @@ object DriverSelection {
         return File("$root/config/custom_configs/config_$titleId.yml").isFile
     }
 
+    // settingsGet on a leaf returns {"type":"string","value":...,"default":...},
+    // not the bare string. Reading it as a string made the fallback path the
+    // whole JSON object, which settingsSet then rejected as invalid json, so a
+    // game's custom config never received the selected driver.
     private fun readSetting(titleId: String): String = runCatching {
-        RPCS3.instance.settingsGet(DriverPathKey, titleId).trim().trim('"')
+        parseStringSetting(RPCS3.instance.settingsGet(DriverPathKey, titleId))
     }.getOrDefault("")
+
+    fun parseStringSetting(raw: String): String {
+        val text = raw.trim()
+        if (text.startsWith("{")) {
+            return runCatching { JSONObject(text).optString("value", "") }.getOrDefault("")
+        }
+        return text.trim('"')
+    }
 
     private fun writeSetting(context: Context, path: String, titleId: String) {
         runCatching {

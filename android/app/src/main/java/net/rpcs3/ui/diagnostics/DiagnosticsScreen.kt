@@ -61,7 +61,9 @@ fun DiagnosticsScreen(
                 .listFiles { f -> f.name.endsWith(".yml") }?.size ?: 0
 
             driver = runCatching {
-                RPCS3.instance.settingsGet("Video@@Vulkan@@Custom Driver@@Path", "")
+                net.rpcs3.utils.DriverSelection.parseStringSetting(
+                    RPCS3.instance.settingsGet("Video@@Vulkan@@Custom Driver@@Path", "")
+                )
             }.getOrDefault("")
 
             systemInfo = runCatching { RPCS3.instance.systemInfo() }.getOrDefault("")
