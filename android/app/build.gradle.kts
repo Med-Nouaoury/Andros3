@@ -36,6 +36,16 @@ android {
     }
 
     signingConfigs {
+        // A fixed, committed debug key: without it every CI run signs with a
+        // fresh key, so a new debug APK cannot be installed over the old one and
+        // users lose firmware, games and compiled caches on each update.
+        // This key is public on purpose; release builds use the custom key below.
+        getByName("debug") {
+            storeFile = file("andros3-debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         create("custom-key") {
             val keystoreAlias = System.getenv("KEYSTORE_ALIAS") ?: ""
             val keystorePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
