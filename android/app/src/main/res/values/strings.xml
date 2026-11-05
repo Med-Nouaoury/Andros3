@@ -566,4 +566,6 @@
     <string name="benchmark_share_chooser">Share Benchmark</string>
     <string name="benchmark_saved">Benchmark saved: %1$s</string>
     <string name="benchmark_not_saved">Could not save the benchmark</string>
+    <string name="games_library_header">Library</string>
+    <string name="games_resume_badge">RESUME</string>
 </resources>

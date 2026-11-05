@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Andros3 launcher background: crimson diagonal gradient with a soft highlight. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0" android:startY="0"
+                android:endX="108" android:endY="108"
+                android:startColor="#FF5A000E"
+                android:centerColor="#FFA3001F"
+                android:endColor="#FFE11D3C" />
+        </aapt:attr>
+    </path>
+    <path android:pathData="M0,72 C30,58 62,80 108,52 L108,108 L0,108 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0" android:startY="60"
+                android:endX="0" android:endY="108"
+                android:startColor="#33FFFFFF"
+                android:endColor="#00FFFFFF" />
+        </aapt:attr>
+    </path>
+</vector>

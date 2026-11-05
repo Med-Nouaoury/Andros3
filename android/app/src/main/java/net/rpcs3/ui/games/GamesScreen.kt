@@ -15,6 +15,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -29,6 +30,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
@@ -57,6 +59,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -92,6 +98,7 @@ import net.rpcs3.dialogs.AlertDialogQueue
 import net.rpcs3.gameTitleId
 import net.rpcs3.ui.components.chasingBorder
 import net.rpcs3.ui.library.GameSort
+import net.rpcs3.ui.theme.Rpcs
 import net.rpcs3.ui.theme.SettingsStyle
 import net.rpcs3.utils.FileUtil
 import net.rpcs3.utils.FolderGames
@@ -385,30 +392,38 @@ fun GameItem(
             }
         }
 
+        val tileShape = RoundedCornerShape(16.dp)
+        val title = game.info.name.value ?: gameTitleId(game.info.path)
+        val isVsh = game.info.name.value == "VSH"
+        val isResumable =
+            emulatorState == EmulatorState.Paused && emulatorActiveGame == game.info.path
+
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .shadow(
+                    elevation = if (tileFocused) 18.dp else 8.dp,
+                    shape = tileShape,
+                    ambientColor = Rpcs.Accent,
+                    spotColor = Rpcs.Accent
+                )
+                .clip(tileShape)
+                .background(Brush.verticalGradient(listOf(Rpcs.SurfaceRaised, Rpcs.Surface)))
                 .then(
                     if (tileFocused) {
                         Modifier
                     } else {
-                        Modifier.border(
-                            1.dp,
-                            SettingsStyle.CardBorder,
-                            RoundedCornerShape(12.dp)
-                        )
+                        Modifier.border(1.dp, Rpcs.Outline, tileShape)
                     }
                 )
-                .chasingBorder(isFocused = tileFocused, cornerRadius = 12.dp)
-                .background(SettingsStyle.CardSurface, RoundedCornerShape(12.dp))
+                .chasingBorder(isFocused = tileFocused, cornerRadius = 16.dp)
                 .focusable(interactionSource = tileInteraction)
                 .combinedClickable(
                     interactionSource = tileInteraction,
                     indication = null,
                     onClick = { detailVisible.value = true },
                     onLongClick = {
-                        if (game.info.name.value != "VSH") {
+                        if (!isVsh) {
                             menuExpanded.value = true
                         }
                     }
@@ -431,33 +446,42 @@ fun GameItem(
                 }
             }
 
+            // PS3 ICON0.PNG is 320x176, so the cover keeps that shape instead of being cropped.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
-                    .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
+                    .aspectRatio(320f / 176f)
             ) {
                 if (game.info.iconPath.value != null && iconExists.value) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
+                    AsyncImage(
+                        model = game.info.iconPath.value,
+                        contentScale = if (isVsh) ContentScale.Fit else ContentScale.Crop,
+                        contentDescription = null,
                         modifier = Modifier.fillMaxSize()
-                    ) {
-                        AsyncImage(
-                            model = game.info.iconPath.value,
-                            contentScale = if (game.info.name.value == "VSH") ContentScale.Fit else ContentScale.Crop,
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
+                    )
+                } else {
+                    GameCoverPlaceholder(title)
                 }
 
+                // Melt the cover into the card body.
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(26.dp)
+                        .align(Alignment.BottomCenter)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color.Transparent, Rpcs.SurfaceRaised.copy(alpha = 0.92f))
+                            )
+                        )
+                )
+
                 if (game.progressList.isNotEmpty()) {
-                    Row(
+                    Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(withAlpha(Color.DarkGray, 0.6f))
-                    ) {}
+                            .background(Rpcs.Background.copy(alpha = 0.6f))
+                    )
 
                     val progressChannel = game.progressList.first().id
                     val progress = ProgressRepository.getItem(progressChannel)
@@ -465,84 +489,99 @@ fun GameItem(
                     val maxValue = progress?.value?.max
 
                     if (progressValue != null && maxValue != null) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center,
+                        Box(
+                            contentAlignment = Alignment.Center,
                             modifier = Modifier.fillMaxSize()
                         ) {
                             if (maxValue.longValue != 0L) {
                                 CircularProgressIndicator(
-                                    modifier = Modifier
-                                        .width(64.dp)
-                                        .height(64.dp),
-                                    color = MaterialTheme.colorScheme.secondary,
-                                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    modifier = Modifier.size(48.dp),
+                                    color = Rpcs.AccentBright,
+                                    trackColor = Rpcs.Outline,
                                     progress = {
                                         progressValue.longValue.toFloat() / maxValue.longValue.toFloat()
                                     },
                                 )
                             } else {
                                 CircularProgressIndicator(
-                                    modifier = Modifier
-                                        .width(64.dp)
-                                        .height(64.dp),
-                                    color = MaterialTheme.colorScheme.secondary,
-                                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    modifier = Modifier.size(48.dp),
+                                    color = Rpcs.AccentBright,
+                                    trackColor = Rpcs.Outline,
                                 )
                             }
                         }
                     }
-                } else if (emulatorState == EmulatorState.Paused && emulatorActiveGame == game.info.path) {
-                    Card(modifier = Modifier.padding(5.dp)) {
+                } else if (isResumable) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(8.dp)
+                            .background(Rpcs.Accent, RoundedCornerShape(50))
+                            .padding(start = 6.dp, end = 10.dp, top = 3.dp, bottom = 3.dp)
+                    ) {
                         Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_play),
-                            contentDescription = null
+                            imageVector = Icons.Filled.PlayArrow,
+                            contentDescription = null,
+                            tint = Rpcs.TextPrimary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = stringResource(R.string.games_resume_badge),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Rpcs.TextPrimary
                         )
                     }
                 }
 
                 if (game.hasFlag(GameFlag.Locked) || game.hasFlag(GameFlag.Trial)) {
-                    Row(
-                        verticalAlignment = Alignment.Top,
-                        horizontalArrangement = Arrangement.End,
-                        modifier = Modifier.fillMaxSize()
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                            .size(30.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(Rpcs.Background.copy(alpha = 0.75f))
+                            .combinedClickable(onClick = { installKeyLauncher.launch("*/*") })
                     ) {
-                        Card(
-                            onClick = {
-                                installKeyLauncher.launch("*/*")
-                            }) {
-
-                            Icon(
-                                Icons.Outlined.Lock,
-                                contentDescription = stringResource(R.string.games_locked),
-                                modifier = Modifier
-                                    .size(30.dp)
-                                    .padding(7.dp)
-                            )
-                        }
+                        Icon(
+                            Icons.Outlined.Lock,
+                            contentDescription = stringResource(R.string.games_locked),
+                            tint = Rpcs.Warning,
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
                 }
-
             }
 
-            Text(
-                text = game.info.name.value ?: gameTitleId(game.info.path),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 4.dp)
-                    .then(
-                        if (tileFocused) {
-                            Modifier.basicMarquee(iterations = Int.MAX_VALUE)
-                        } else {
-                            Modifier
-                        }
-                    ),
-                style = MaterialTheme.typography.bodySmall,
-                color = SettingsStyle.TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center
-            )
+            Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp)) {
+                Text(
+                    text = title,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(
+                            if (tileFocused) {
+                                Modifier.basicMarquee(iterations = Int.MAX_VALUE)
+                            } else {
+                                Modifier
+                            }
+                        ),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Rpcs.TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = gameTitleId(game.info.path),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Rpcs.TextDim,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
     if (detailVisible.value) {
@@ -681,35 +720,105 @@ fun GamesScreen(
                 .let { if (sort == GameSort.NameDescending) it.reversed() else it }
         }
 
-        BoxWithConstraints(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(SettingsStyle.BgDeep)
+                .background(
+                    Brush.verticalGradient(
+                        0.0f to Rpcs.BackdropTop,
+                        0.55f to Rpcs.BackdropMid,
+                        1.0f to Rpcs.BackdropBottom
+                    )
+                )
         ) {
-            val columns = if (maxWidth > 600.dp) 4 else 2
-            val spacing = 12.dp
-            val edge = 14.dp
-            val columnWidth = (maxWidth - edge * 2 - spacing * (columns - 1)) / columns
-            val rowHeight = minOf((maxHeight - spacing - edge * 2) / 2, columnWidth * 1.25f)
+            // Soft light pooling at the bottom of the backdrop.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(Rpcs.Glow.copy(alpha = 0.22f), Color.Transparent),
+                            center = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY),
+                            radius = 1400f
+                        )
+                    )
+            )
 
             LazyVerticalGrid(
-                columns = GridCells.Fixed(columns),
-                horizontalArrangement = Arrangement.spacedBy(spacing),
-                verticalArrangement = Arrangement.spacedBy(spacing),
-                contentPadding = PaddingValues(edge),
+                columns = GridCells.Adaptive(minSize = 160.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 24.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    LibraryHeader(count = shown.size)
+                }
+
                 items(count = shown.size, key = { index -> shown[index].info.path }) { index ->
                     GameItem(
                         game = shown[index],
                         navigateToGameSettings = navigateToGameSettings,
                         navigateToGamePatches = navigateToGamePatches,
-                        navigateToGameUpdates = navigateToGameUpdates,
-                        modifier = Modifier.height(rowHeight)
+                        navigateToGameUpdates = navigateToGameUpdates
                     )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun LibraryHeader(count: Int) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp, bottom = 2.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(width = 4.dp, height = 22.dp)
+                .background(Rpcs.AccentBright, RoundedCornerShape(2.dp))
+        )
+        Text(
+            text = stringResource(R.string.games_library_header),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = Rpcs.TextPrimary,
+            modifier = Modifier.padding(start = 10.dp)
+        )
+        Text(
+            text = count.toString(),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = Rpcs.TextPrimary,
+            modifier = Modifier
+                .padding(start = 10.dp)
+                .background(Rpcs.Accent.copy(alpha = 0.85f), RoundedCornerShape(50))
+                .padding(horizontal = 9.dp, vertical = 2.dp)
+        )
+    }
+}
+
+/** Shown when a game has no ICON0.PNG: crimson gradient with the title's initial. */
+@Composable
+private fun GameCoverPlaceholder(title: String) {
+    val initial = title.trim().firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()?.toString() ?: "?"
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.linearGradient(listOf(Rpcs.BackdropTop, Rpcs.Accent))
+            )
+    ) {
+        Text(
+            text = initial,
+            fontSize = 44.sp,
+            fontWeight = FontWeight.Black,
+            color = Rpcs.TextPrimary.copy(alpha = 0.9f)
+        )
     }
 }
 

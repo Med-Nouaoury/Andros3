@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Andros3 mark: a bold "A" with a play arrow in its counter, inside the 66dp safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- A legs -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M54,27 L76,80 L66,80 L54,49 L42,80 L32,80 Z" />
+    <!-- play arrow -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M50.5,62.5 L50.5,73.5 L59.5,68 Z" />
+</vector>

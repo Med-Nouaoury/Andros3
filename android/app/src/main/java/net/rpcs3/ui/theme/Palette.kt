@@ -4,31 +4,38 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 object Rpcs {
-    val Background = Color(0xFF0F0F18)
-    val Surface = Color(0xFF16161F)
-    val SurfaceRaised = Color(0xFF1C1C2A)
-    val SurfaceInset = Color(0xFF12121B)
-    val Outline = Color(0xFF2A2A3A)
-    val OutlineSoft = Color(0xFF20202E)
+    // Andros3 crimson theme: wine-black surfaces under a vivid red accent.
+    val Background = Color(0xFF160307)
+    val Surface = Color(0xFF210509)
+    val SurfaceRaised = Color(0xFF2E0910)
+    val SurfaceInset = Color(0xFF120206)
+    val Outline = Color(0xFF4D1520)
+    val OutlineSoft = Color(0xFF380E17)
 
-    val Accent = Color(0xFF1A9FFF)
-    val AccentBright = Color(0xFF4FC3F7)
+    val Accent = Color(0xFFE11D3C)
+    val AccentBright = Color(0xFFFF4D63)
 
-    val TextPrimary = Color(0xFFF0F4FF)
-    val TextSecondary = Color(0xFF93A6BC)
-    val TextDim = Color(0xFF6E7681)
+    val TextPrimary = Color(0xFFFFF2F3)
+    val TextSecondary = Color(0xFFE0AEB4)
+    val TextDim = Color(0xFFA0707A)
 
-    val Danger = Color(0xFFFF6B6B)
-    val Warning = Color(0xFFFFB74D)
+    // Kept apart from the red accent so errors still read as errors.
+    val Danger = Color(0xFFFF8A4C)
+    val Warning = Color(0xFFFFC857)
     val Success = Color(0xFF4CC38A)
 
-    val GradientCyan = Color(0xFF00B4D8)
-    val GradientViolet = Color(0xFF7B2FF7)
+    // Backdrop gradient, deep wine to crimson.
+    val GradientCyan = Color(0xFF7A0010)
+    val GradientViolet = Color(0xFFD01A35)
+    val BackdropTop = Color(0xFF3A0009)
+    val BackdropMid = Color(0xFF6E0012)
+    val BackdropBottom = Color(0xFFB0102A)
+    val Glow = Color(0xFFFF6B7D)
 
-    val SelectionFill = Accent.copy(alpha = 0.14f)
-    val SelectionBorder = Accent.copy(alpha = 0.55f)
+    val SelectionFill = Accent.copy(alpha = 0.18f)
+    val SelectionBorder = Accent.copy(alpha = 0.65f)
     val FocusBorder = AccentBright
-    val PressedFill = Accent.copy(alpha = 0.22f)
+    val PressedFill = Accent.copy(alpha = 0.26f)
 }
 
 object Dims {

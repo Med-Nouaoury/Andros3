@@ -7,4 +7,8 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <color name="andros3_background">#FF160307</color>
+    <color name="andros3_accent">#FFE11D3C</color>
+    <color name="andros3_icon_top">#FF8E0016</color>
+    <color name="andros3_icon_bottom">#FFE11D3C</color>
 </resources>

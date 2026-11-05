@@ -2,5 +2,7 @@
     <!-- Base application theme. -->
     <style name="Theme.RPCS3" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:windowLayoutInDisplayCutoutMode">always</item>
+        <item name="android:windowBackground">@color/andros3_background</item>
+        <item name="android:colorAccent">@color/andros3_accent</item>
     </style>
 </resources>
