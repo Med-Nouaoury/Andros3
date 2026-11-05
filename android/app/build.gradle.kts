@@ -187,3 +187,11 @@ val copyRpcs3Patches by tasks.registering(Copy::class) {
     }
     into(layout.buildDirectory.dir("generated/rpcs3-assets/patches"))
 }
+
+// The generated assets dir is registered with builtBy(), but AGP does not
+// follow that dependency, so these copies never ran in clean CI builds and the
+// APK shipped without overlay icons or the bundled patch.yml. Run them before
+// anything else in the build.
+tasks.named("preBuild") {
+    dependsOn(copyRpcs3Icons, copyRpcs3Patches)
+}
