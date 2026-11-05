@@ -73,6 +73,7 @@ class BenchmarkRecorder(
         val watts: Float,
         val batteryPercent: Int,
         val coreMhz: List<Int>,
+        val capMhz: List<Int>,
         val threads: ThreadLoad
     )
 
@@ -188,6 +189,7 @@ class BenchmarkRecorder(
                 watts = device.watts,
                 batteryPercent = device.batteryPercent,
                 coreMhz = (0 until coreCount).map { readCoreMhz(it) },
+                capMhz = (0 until coreCount).map { readCapMhz(it) },
                 threads = readThreadLoad()
             )
         )
@@ -268,6 +270,19 @@ class BenchmarkRecorder(
         )
     }
 
+    // scaling_max_freq: the ceiling the OS currently allows. When it sits below
+    // cpuinfo_max_freq with no thermal status, something (vendor game service,
+    // power profile) is capping the CPU on purpose.
+    private fun readCapMhz(core: Int): Int = runCatching {
+        File("/sys/devices/system/cpu/cpu$core/cpufreq/scaling_max_freq")
+            .readText().trim().toInt() / 1000
+    }.getOrDefault(-1)
+
+    private fun hwMaxMhz(core: Int): Int = runCatching {
+        File("/sys/devices/system/cpu/cpu$core/cpufreq/cpuinfo_max_freq")
+            .readText().trim().toInt() / 1000
+    }.getOrDefault(-1)
+
     private fun readCoreMhz(core: Int): Int = runCatching {
         File("/sys/devices/system/cpu/cpu$core/cpufreq/scaling_cur_freq")
             .readText().trim().toInt() / 1000
@@ -317,6 +332,11 @@ class BenchmarkRecorder(
             out.appendLine("# max temperature C: $maxTemp")
             out.appendLine("# worst thermal status (0 none .. 6 shutdown): $worstThermal")
             out.appendLine("# avg power W: ${fmt(avgWatts)}")
+            val capSummary = (0 until coreCount).joinToString(" ") { core ->
+                val caps = samples.mapNotNull { it.capMhz.getOrNull(core)?.takeIf { v -> v > 0 } }
+                "cpu$core ${caps.minOrNull() ?: -1}-${caps.maxOrNull() ?: -1}/${hwMaxMhz(core)}"
+            }
+            out.appendLine("# cpu ceiling MHz during run (min-max / hardware max): $capSummary")
 
             fun avgOf(list: List<Sample>, pick: (ThreadLoad) -> Float): Float =
                 list.map { pick(it.threads) }.filter { !it.isNaN() }
@@ -350,7 +370,8 @@ class BenchmarkRecorder(
             out.appendLine(
                 "t_s,state,fps,frametime_ms,cpu_pct,gpu_pct,ram_used_mb,temp_c," +
                     "thermal_status,thermal_headroom,watts,battery_pct,$coreHeader," +
-                    "ppu_main_pct,ppu_main_cpu,ppu_all_pct,spu_max_pct,spu_all_pct,rsx_pct,compile_pct"
+                    "ppu_main_pct,ppu_main_cpu,ppu_all_pct,spu_max_pct,spu_all_pct,rsx_pct,compile_pct," +
+                    (0 until coreCount).joinToString(",") { "cpu${it}_cap_mhz" }
             )
             for (s in samples) {
                 out.appendLine(
@@ -361,7 +382,7 @@ class BenchmarkRecorder(
                         s.batteryPercent, s.coreMhz.joinToString(","),
                         fmt(s.threads.ppuMain), s.threads.ppuMainCpu, fmt(s.threads.ppuAll),
                         fmt(s.threads.spuMax), fmt(s.threads.spuAll), fmt(s.threads.rsx),
-                        fmt(s.threads.compile)
+                        fmt(s.threads.compile), s.capMhz.joinToString(",")
                     ).joinToString(",")
                 )
             }
