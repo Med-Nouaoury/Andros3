@@ -142,6 +142,7 @@ void fmt_class_string<thread_class>::format(std::string& out, u64 arg)
 		case thread_class::general: return "General";
 		case thread_class::ppu: return "PPU";
 		case thread_class::spu: return "SPU";
+		case thread_class::background: return "Background";
 		case thread_class::rsx: return "RSX";
 		}
 		return unknown;
@@ -3005,8 +3006,9 @@ void thread_base::initialize(void (*error_cb)())
 	}
 #endif
 
-#if !defined(ANDROID) && (defined(__linux__) || defined(__DragonFly__) || defined(__FreeBSD__))
+#if defined(__linux__) || defined(__DragonFly__) || defined(__FreeBSD__)
 	// A new thread inherits its creator's affinity mask (e.g. compile workers spawned by a pinned PPU thread): reset it to the process mask
+	// Andros3: also on Android, where per-CPU affinity would otherwise confine LLVM/shader workers to the core of whoever spawned them
 	if (g_cfg.core.thread_scheduler != thread_scheduler_mode::os)
 	{
 		thread_ctrl::set_thread_affinity_mask(0);

@@ -208,6 +208,7 @@ class RPCS3Activity : ComponentActivity() {
             val bootTitleId = GameDetailsReader.read(bootPath).titleId
             DriverSelection.apply(this@RPCS3Activity, bootTitleId)
             DriverFlags.apply(this@RPCS3Activity, bootTitleId)
+            runCatching { net.rpcs3.utils.PerformanceProfile.applyForGame(this@RPCS3Activity, bootTitleId) }
 
             val descriptor = isoDescriptor
             val bootResult = if (descriptor != null) {

@@ -22,6 +22,9 @@ enum class thread_class : u32
 	general = 0,
 	ppu = 1,
 	spu = 2,
+	// Andros3: no emulator thread runs in this class, so a CPU assigned to it
+	// (Android per-CPU affinity) is left to the OS and to unpinned helper threads.
+	background = 3,
 	rsx = 0x55,
 };
 

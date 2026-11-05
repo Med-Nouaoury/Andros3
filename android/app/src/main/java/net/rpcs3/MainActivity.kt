@@ -185,6 +185,9 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
+                runCatching { net.rpcs3.utils.PerformanceProfile.apply(this@MainActivity) }
+                    .onFailure { android.util.Log.e("PerformanceProfile", "apply failed", it) }
+
                 thread(name = "rpcs3-main-processor") {
                     RPCS3.instance.startMainThreadProcessor()
                 }
