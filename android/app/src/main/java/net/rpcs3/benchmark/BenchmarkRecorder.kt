@@ -72,8 +72,26 @@ class BenchmarkRecorder(
         val thermalHeadroom: Float,
         val watts: Float,
         val batteryPercent: Int,
-        val coreMhz: List<Int>
+        val coreMhz: List<Int>,
+        val threads: ThreadLoad
     )
+
+    /** Per-thread-group CPU use over the last second, in % of one core. */
+    private data class ThreadLoad(
+        val ppuMain: Float = Float.NaN,
+        val ppuMainCpu: Int = -1,
+        val ppuAll: Float = Float.NaN,
+        val spuMax: Float = Float.NaN,
+        val spuAll: Float = Float.NaN,
+        val rsx: Float = Float.NaN,
+        val compile: Float = Float.NaN
+    )
+
+    private val clockTicks = runCatching {
+        android.system.Os.sysconf(android.system.OsConstants._SC_CLK_TCK)
+    }.getOrDefault(100L).coerceAtLeast(1L)
+    private val lastTicks = HashMap<Int, Long>()
+    private var lastTicksAt = 0L
 
     private val appContext = context.applicationContext
     private val handler = Handler(Looper.getMainLooper())
@@ -169,8 +187,84 @@ class BenchmarkRecorder(
                     .getOrDefault(Float.NaN),
                 watts = device.watts,
                 batteryPercent = device.batteryPercent,
-                coreMhz = (0 until coreCount).map { readCoreMhz(it) }
+                coreMhz = (0 until coreCount).map { readCoreMhz(it) },
+                threads = readThreadLoad()
             )
+        )
+    }
+
+    // Thread names (Linux keeps 15 chars): "PPU[0x1000000] ", "SPU[0x1000100] ",
+    // "rsx::thread", and compile workers "PPU Worker", "SPU Worker N", "RSX.WN".
+    private enum class Group { Ppu, Spu, Rsx, Compile, Other }
+
+    private fun groupOf(name: String): Group = when {
+        name.startsWith("PPU[") -> Group.Ppu
+        name.startsWith("SPU[") -> Group.Spu
+        name.startsWith("rsx::thread") || name.startsWith("RSX [") -> Group.Rsx
+        name.startsWith("SPU Worker") || name.startsWith("PPU Worker") ||
+            name.startsWith("RSX.W") || name.contains("LLVM") -> Group.Compile
+        else -> Group.Other
+    }
+
+    private fun readThreadLoad(): ThreadLoad {
+        val now = SystemClock.elapsedRealtime()
+        val elapsedSec = (now - lastTicksAt) / 1000.0
+        val tasks = File("/proc/self/task").listFiles() ?: return ThreadLoad()
+
+        val seen = HashMap<Int, Long>(tasks.size)
+        var ppuMain = 0.0
+        var ppuMainCpu = -1
+        var ppuAll = 0.0
+        var spuMax = 0.0
+        var spuAll = 0.0
+        var rsx = 0.0
+        var compile = 0.0
+
+        for (task in tasks) {
+            val tid = task.name.toIntOrNull() ?: continue
+            val stat = runCatching { File(task, "stat").readText() }.getOrNull() ?: continue
+            val close = stat.lastIndexOf(')')
+            val open = stat.indexOf('(')
+            if (close < 0 || open < 0) continue
+
+            val name = stat.substring(open + 1, close)
+            val fields = stat.substring(close + 2).split(' ')
+            if (fields.size < 37) continue
+
+            val ticks = (fields[11].toLongOrNull() ?: 0L) + (fields[12].toLongOrNull() ?: 0L)
+            seen[tid] = ticks
+
+            val previous = lastTicks[tid] ?: continue
+            if (lastTicksAt == 0L || elapsedSec <= 0.0) continue
+
+            val pct = (ticks - previous) * 100.0 / clockTicks / elapsedSec
+            when (groupOf(name)) {
+                Group.Ppu -> {
+                    ppuAll += pct
+                    if (pct > ppuMain) {
+                        ppuMain = pct
+                        ppuMainCpu = fields[36].toIntOrNull() ?: -1
+                    }
+                }
+                Group.Spu -> {
+                    spuAll += pct
+                    if (pct > spuMax) spuMax = pct
+                }
+                Group.Rsx -> rsx += pct
+                Group.Compile -> compile += pct
+                Group.Other -> Unit
+            }
+        }
+
+        val valid = lastTicksAt != 0L
+        lastTicks.clear()
+        lastTicks.putAll(seen)
+        lastTicksAt = now
+
+        if (!valid) return ThreadLoad()
+        return ThreadLoad(
+            ppuMain.toFloat(), ppuMainCpu, ppuAll.toFloat(),
+            spuMax.toFloat(), spuAll.toFloat(), rsx.toFloat(), compile.toFloat()
         )
     }
 
@@ -224,10 +318,39 @@ class BenchmarkRecorder(
             out.appendLine("# worst thermal status (0 none .. 6 shutdown): $worstThermal")
             out.appendLine("# avg power W: ${fmt(avgWatts)}")
 
+            fun avgOf(list: List<Sample>, pick: (ThreadLoad) -> Float): Float =
+                list.map { pick(it.threads) }.filter { !it.isNaN() }
+                    .let { if (it.isEmpty()) Float.NaN else it.average().toFloat() }
+
+            val runningSamples = samples.filter { it.state == EmulatorState.Running.name }
+            val slow = runningSamples.filter { it.fps in 0.5f..24f }
+            val fast = runningSamples.filter { it.fps >= 27f }
+            fun loadLine(label: String, list: List<Sample>) {
+                out.appendLine(
+                    "# $label (${list.size} s) thread load %: ppu_main ${fmt(avgOf(list) { it.ppuMain })}" +
+                        " | spu_max ${fmt(avgOf(list) { it.spuMax })} | spu_all ${fmt(avgOf(list) { it.spuAll })}" +
+                        " | rsx ${fmt(avgOf(list) { it.rsx })} | compile ${fmt(avgOf(list) { it.compile })}"
+                )
+            }
+            loadLine("full speed, fps>=27", fast)
+            loadLine("slow, fps<24", slow)
+
+            val verdict = when {
+                slow.isEmpty() -> "no slow seconds"
+                avgOf(slow) { it.compile } > 120f ->
+                    "slow seconds line up with code/shader compilation; a second run through the same area should be smoother"
+                avgOf(slow) { it.ppuMain } >= 85f -> "PPU bound (main game thread saturates one core)"
+                avgOf(slow) { it.spuMax } >= 85f -> "SPU bound (an SPU thread saturates one core)"
+                avgOf(slow) { it.rsx } >= 85f -> "RSX bound (graphics command thread saturates one core)"
+                else -> "no single thread saturated in slow seconds; likely waiting on GPU, sync or clocks"
+            }
+            out.appendLine("# bottleneck: $verdict")
+
             val coreHeader = (0 until coreCount).joinToString(",") { "cpu${it}_mhz" }
             out.appendLine(
                 "t_s,state,fps,frametime_ms,cpu_pct,gpu_pct,ram_used_mb,temp_c," +
-                    "thermal_status,thermal_headroom,watts,battery_pct,$coreHeader"
+                    "thermal_status,thermal_headroom,watts,battery_pct,$coreHeader," +
+                    "ppu_main_pct,ppu_main_cpu,ppu_all_pct,spu_max_pct,spu_all_pct,rsx_pct,compile_pct"
             )
             for (s in samples) {
                 out.appendLine(
@@ -235,7 +358,10 @@ class BenchmarkRecorder(
                         fmt(s.seconds), s.state, fmt(s.fps), fmt(s.frametimeMs),
                         s.cpuPercent, s.gpuPercent, s.ramUsedMb, s.temperatureC,
                         s.thermalStatus, fmt(s.thermalHeadroom), fmt(s.watts),
-                        s.batteryPercent, s.coreMhz.joinToString(",")
+                        s.batteryPercent, s.coreMhz.joinToString(","),
+                        fmt(s.threads.ppuMain), s.threads.ppuMainCpu, fmt(s.threads.ppuAll),
+                        fmt(s.threads.spuMax), fmt(s.threads.spuAll), fmt(s.threads.rsx),
+                        fmt(s.threads.compile)
                     ).joinToString(",")
                 )
             }
