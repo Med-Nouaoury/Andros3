@@ -114,6 +114,13 @@ object PerformanceProfile {
         prefs.edit { putBoolean(stamp, true) }
     }
 
+    /** "RPCS3 Scheduler | PPU,General,..." for the given config, for benchmark headers. */
+    fun describe(titleId: String): String {
+        val target = if (titleId.isNotEmpty() && DriverSelection.customConfigExists(titleId)) titleId else ""
+        val cpus = (0 until MAX_CONFIG_CPUS).joinToString(",") { read(cpuKey(it), target) }
+        return "${read(SCHEDULER_KEY, target)} | $cpus"
+    }
+
     private fun isStock(titleId: String): Boolean {
         if (read(SCHEDULER_KEY, titleId) != SCHEDULER_OS) {
             return false

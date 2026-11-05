@@ -214,6 +214,7 @@ class BenchmarkRecorder(
             out.appendLine("# app: ${appContext.packageName} $version")
             out.appendLine("# device: ${Build.MANUFACTURER} ${Build.MODEL} | soc: ${Build.SOC_MANUFACTURER} ${Build.SOC_MODEL} | android ${Build.VERSION.RELEASE}")
             out.appendLine("# title: $title")
+            out.appendLine("# scheduler | cpu affinity: ${runCatching { net.rpcs3.utils.PerformanceProfile.describe(title) }.getOrDefault("?")}")
             out.appendLine("# running seconds with fps>0: ${active.size} of ${samples.size}")
             out.appendLine("# avg fps: ${fmt(avgFps)}")
             out.appendLine("# median fps: ${fmt(percentile(fpsSorted, 0.5f))}")

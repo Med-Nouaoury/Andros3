@@ -32,6 +32,8 @@
 #include "Utilities/bin_patch.h"
 #include "Loader/ISO.h"
 #include <climits>
+#include <dirent.h>
+#include <dlfcn.h>
 #include "Emu/system_utils.hpp"
 #include "Emu/VFS.h"
 #include "Emu/vfs_config.h"
@@ -153,6 +155,213 @@ struct LogListener : logs::listener {
   }
 } static g_androidLogListener;
 
+// Andros3: Android Dynamic Performance Framework (ADPF) hint session.
+//
+// Tells the OS which threads carry the emulation (PPU, SPU, RSX) and how long
+// each frame took against a target, so the scheduler raises their clocks when
+// frames run late instead of keeping big cores parked at low frequency.
+// APerformanceHint is API 33+ and minSdk is 31, so it is resolved at runtime;
+// on older systems or if anything fails, this does nothing.
+namespace adpf {
+struct APerformanceHintManager;
+struct APerformanceHintSession;
+
+using get_manager_t = APerformanceHintManager *(*)();
+using create_session_t = APerformanceHintSession *(*)(APerformanceHintManager *,
+                                                     const int32_t *, size_t,
+                                                     int64_t);
+using update_target_t = int (*)(APerformanceHintSession *, int64_t);
+using report_actual_t = int (*)(APerformanceHintSession *, int64_t);
+using close_session_t = void (*)(APerformanceHintSession *);
+using set_threads_t = int (*)(APerformanceHintSession *, const int32_t *,
+                              size_t);
+
+constexpr int64_t k_target_60 = 16'666'667;
+constexpr int64_t k_target_30 = 33'333'333;
+
+static std::mutex g_mutex;
+static bool g_loaded = false;
+static bool g_available = false;
+static get_manager_t g_get_manager;
+static create_session_t g_create;
+static update_target_t g_update_target;
+static report_actual_t g_report;
+static close_session_t g_close;
+static set_threads_t g_set_threads; // API 34+, optional
+
+static APerformanceHintManager *g_manager;
+static APerformanceHintSession *g_session;
+static std::vector<int32_t> g_tids;
+static std::chrono::steady_clock::time_point g_last_scan{};
+static int64_t g_target = k_target_30;
+static float g_recent[32]{};
+static u32 g_recent_pos = 0;
+
+static bool load() {
+  if (g_loaded) {
+    return g_available;
+  }
+  g_loaded = true;
+
+  void *lib = dlopen("libandroid.so", RTLD_NOW | RTLD_LOCAL);
+  if (!lib) {
+    return false;
+  }
+
+  g_get_manager = reinterpret_cast<get_manager_t>(
+      dlsym(lib, "APerformanceHint_getManager"));
+  g_create = reinterpret_cast<create_session_t>(
+      dlsym(lib, "APerformanceHint_createSession"));
+  g_update_target = reinterpret_cast<update_target_t>(
+      dlsym(lib, "APerformanceHint_updateTargetWorkDuration"));
+  g_report = reinterpret_cast<report_actual_t>(
+      dlsym(lib, "APerformanceHint_reportActualWorkDuration"));
+  g_close = reinterpret_cast<close_session_t>(
+      dlsym(lib, "APerformanceHint_closeSession"));
+  g_set_threads = reinterpret_cast<set_threads_t>(
+      dlsym(lib, "APerformanceHint_setThreads"));
+
+  if (!g_get_manager || !g_create || !g_update_target || !g_report ||
+      !g_close) {
+    rpcs3_android.notice("ADPF: performance hints not available on this system");
+    return false;
+  }
+
+  g_manager = g_get_manager();
+  g_available = g_manager != nullptr;
+  return g_available;
+}
+
+// Emulator threads that gate frame time. Linux thread names are cut to 15
+// chars: "PPU[0x1000000] ", "SPU[0x1000100] " and "rsx::thread".
+static std::vector<int32_t> scan_threads() {
+  std::vector<int32_t> result;
+
+  DIR *dir = opendir("/proc/self/task");
+  if (!dir) {
+    return result;
+  }
+
+  while (dirent *entry = readdir(dir)) {
+    if (entry->d_name[0] < '0' || entry->d_name[0] > '9') {
+      continue;
+    }
+
+    char path[64];
+    std::snprintf(path, sizeof(path), "/proc/self/task/%s/comm", entry->d_name);
+
+    FILE *file = std::fopen(path, "r");
+    if (!file) {
+      continue;
+    }
+
+    char name[32]{};
+    const bool ok = std::fgets(name, sizeof(name), file) != nullptr;
+    std::fclose(file);
+
+    if (!ok) {
+      continue;
+    }
+
+    const std::string_view view{name};
+    if (view.starts_with("PPU[") || view.starts_with("SPU[") ||
+        view.starts_with("rsx::thread")) {
+      result.push_back(static_cast<int32_t>(std::atoi(entry->d_name)));
+    }
+  }
+
+  closedir(dir);
+  std::sort(result.begin(), result.end());
+
+  // Keep the session small; the first threads found are the long-lived ones.
+  if (result.size() > 16) {
+    result.resize(16);
+  }
+
+  return result;
+}
+
+static void close_locked() {
+  if (g_session) {
+    g_close(g_session);
+    g_session = nullptr;
+  }
+  g_tids.clear();
+  g_last_scan = {};
+  g_recent_pos = 0;
+}
+
+// Pick 16.7 ms or 33.3 ms from what the game has been presenting: a game that
+// is locked to 30 should not be pushed to 60, a 60 fps game should get 60.
+static int64_t pick_target() {
+  const u32 count = std::min<u32>(g_recent_pos, std::size(g_recent));
+  if (count < 8) {
+    return g_target;
+  }
+
+  float sorted[std::size(g_recent)];
+  std::copy_n(g_recent, count, sorted);
+  std::sort(sorted, sorted + count);
+  const float median = sorted[count / 2];
+  return median < 25.f ? k_target_60 : k_target_30;
+}
+
+static void on_frame(double frame_ms) {
+  std::lock_guard lock(g_mutex);
+
+  if (!load()) {
+    return;
+  }
+
+  const auto now = std::chrono::steady_clock::now();
+
+  if (now - g_last_scan > std::chrono::seconds(2)) {
+    g_last_scan = now;
+    auto tids = scan_threads();
+
+    if (!tids.empty() && tids != g_tids) {
+      if (g_session && g_set_threads &&
+          g_set_threads(g_session, tids.data(), tids.size()) == 0) {
+        g_tids = std::move(tids);
+      } else {
+        if (g_session) {
+          g_close(g_session);
+        }
+        g_session = g_create(g_manager, tids.data(), tids.size(), g_target);
+        g_tids = std::move(tids);
+
+        if (g_session) {
+          rpcs3_android.notice("ADPF: hint session over %u threads",
+                               static_cast<u32>(g_tids.size()));
+        } else {
+          rpcs3_android.warning("ADPF: could not create hint session");
+        }
+      }
+    }
+  }
+
+  if (!g_session) {
+    return;
+  }
+
+  g_recent[g_recent_pos++ % std::size(g_recent)] = static_cast<float>(frame_ms);
+
+  if (const int64_t target = pick_target(); target != g_target) {
+    g_target = target;
+    g_update_target(g_session, g_target);
+  }
+
+  g_report(g_session, static_cast<int64_t>(frame_ms * 1'000'000.0));
+}
+
+static void reset() {
+  std::lock_guard lock(g_mutex);
+  if (g_available) {
+    close_locked();
+  }
+}
+} // namespace adpf
+
 struct GraphicsFrame : GSFrameBase {
   mutable ANativeWindow *activeNativeWindow = nullptr;
   mutable int width = 0;
@@ -163,6 +372,7 @@ struct GraphicsFrame : GSFrameBase {
   u32 fpsFrames = 0;
 
   ~GraphicsFrame() {
+    adpf::reset();
     g_hud_fps.store(0.f);
     g_hud_frametime.store(0.f);
     g_hud_last_frame_ms.store(0.f);
@@ -228,6 +438,7 @@ struct GraphicsFrame : GSFrameBase {
 
     if (sinceLast > 0.0 && sinceLast < 500.0) {
       g_hud_last_frame_ms.store(static_cast<float>(sinceLast));
+      adpf::on_frame(sinceLast);
     }
 
     fpsFrames++;
